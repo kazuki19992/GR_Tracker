@@ -1,0 +1,4 @@
+<resources>
+  <string name="app_name">Tracker</string>
+  <string name="debug_recievedTerm">Received GPS data(BT Serial)</string>
+</resources>

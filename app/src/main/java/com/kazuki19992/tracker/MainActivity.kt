@@ -1,6 +1,7 @@
 package com.kazuki19992.tracker
 
 import android.os.Bundle
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.clickable
@@ -8,6 +9,9 @@ import androidx.compose.foundation.layout.*
 //import androidx.compose.material.Text
 import androidx.compose.material.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
@@ -35,10 +39,12 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun TopView() {
+  val received by remember { mutableStateOf("読込中です……") }
+  Log.d("APPS_Debug", "起動完了")
   // トップ画面
   Column {
     Header()
-    SerialTerm()
+    SerialTerm(received)
   }
 }
 
@@ -50,7 +56,7 @@ fun Header() {
 }
 
 @Composable
-fun SerialTerm() {
+fun SerialTerm(received: String) {
   Card(
     modifier = Modifier
       .fillMaxWidth()
@@ -68,10 +74,7 @@ fun SerialTerm() {
       )
       Spacer(modifier = Modifier.size(5.dp))
       Text(
-        text =
-          "\$POS,Nihon,8:29:10,37:21:6883,N,140:22:9866,E,1\n" +
-          "\$POS,Nihon,8:29:10,37:21:6883,N,140:22:9866,E,A\n" +
-          "\$POS,Nihon,8:29:10,37:21:6883,N,140:22:9866,E,1\n",
+        text = "$received",
         color = Color.Cyan,
         fontSize = 10.sp,
         fontFamily = FontFamily.Monospace

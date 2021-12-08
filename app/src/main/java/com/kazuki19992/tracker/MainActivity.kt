@@ -113,13 +113,13 @@ class MainActivity : ComponentActivity() {
   }
 
   private inner class ConnectThread(device: BluetoothDevice) : Thread() {
-//    private val mmSocket: BluetoothSocket? by lazy(LazyThreadSafetyMode.NONE) {
-////       device.createInsecureRfcommSocketToServiceRecord(device.uuids[0].uuid)
-//      device.createRfcommSocketToServiceRecord(device.uuids[0].uuid)
-//      // Insecureだとアプリが落ちる
-//    }
+    private val mmSocket: BluetoothSocket? by lazy(LazyThreadSafetyMode.NONE) {
+       device.createInsecureRfcommSocketToServiceRecord(deviceUuid?.uuid)
+      device.createRfcommSocketToServiceRecord(deviceUuid?.uuid)
+      // Insecureだとアプリが落ちる
+    }
 
-    private val mmSocket: BluetoothSocket? = device.createRfcommSocketToServiceRecord(deviceUuid?.uuid)
+//    private val mmSocket: BluetoothSocket? = device.createRfcommSocketToServiceRecord(deviceUuid?.uuid)
 
 
     public override fun run() {
@@ -130,13 +130,24 @@ class MainActivity : ComponentActivity() {
       val socket = mmSocket
       log("ソケット: " + socket.toString())
       socket ?: return
-      try {
-        socket.connect()
-        log("ソケット接続確立")
-      }catch (e: IOException){
-        err(e.message.toString())
-        err(e.stackTraceToString())
+
+      while(true){
+        try {
+          socket.connect()
+          log("ソケット接続確立")
+          break
+
+        }catch (e: IOException){
+          err("エラー発生!")
+          err(e.message.toString())
+          err(e.stackTraceToString())
+
+          // 再試行
+          sleep(1000)
+          continue
+        }
       }
+
       manageMyConnectedSocket(socket)
     }
 
@@ -161,15 +172,21 @@ class MainActivity : ComponentActivity() {
       Log.d(debugTag, "connect start!")
       // Keep listening to the InputStream until an exception occurs.
       while (true) {
-        val mmBuffer: ByteArray = ByteArray(1024)
+        var mmBuffer: ByteArray = ByteArray(1024)
+        log("loop")
 
+        var tmpText: String = ""
         // Read from the InputStream.
-        numBytes = try {
-          mmInStream.read(mmBuffer)
+//        numBytes = try {
+        try{
+          log("データを読みます")
+          Log.d(debugTag, mmInStream.toString())
+//          mmInStream.read(mmBuffer)
         } catch (e: IOException) {
-          Log.d(debugTag, "Input stream was disconnected", e)
+          Log.e(debugTag, "Input stream was disconnected", e)
           break
         }
+        log("データ:" + tmpText)
         val checkString = String(mmBuffer)
         val compareResult = checkString.startsWith("\$POS")
 
@@ -242,9 +259,9 @@ fun TopView(sensor: String, received: String) {
     handler.post(runnable)
   }
 
+  // マップ関連
   val mapView = rememberMapViewWithLifecycle()
-//  err(Log.getStackTraceString(Throwable()))
-  log(mapView.javaClass.name)
+//  log(mapView.javaClass.name)
 
   // トップ画面
   Column {

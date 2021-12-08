@@ -6,10 +6,10 @@ import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothManager
 import android.bluetooth.BluetoothSocket
-import android.bluetooth.BluetoothServerSocket
 import android.content.Intent
 import android.os.Bundle
 import android.os.Handler
+import android.os.ParcelUuid
 import android.text.method.MultiTapKeyListener.getInstance
 import android.util.Log
 import android.widget.Toast
@@ -43,7 +43,7 @@ import kotlinx.coroutines.launch
 import java.io.IOException
 import java.io.InputStream
 import java.io.OutputStream
-import java.util.*
+import java.lang.String.format
 import kotlin.reflect.typeOf
 
 
@@ -51,6 +51,7 @@ import kotlin.reflect.typeOf
 const val debugTag = "DebugTag"
 
 var ReceivedString: String = "受信中……"
+var deviceUuid: ParcelUuid? = null
 
 class MainActivity : ComponentActivity() {
   val REQUEST_ENABLE_BT = 1
@@ -89,6 +90,7 @@ class MainActivity : ComponentActivity() {
 
         // UUIDをログに表示
         device.uuids.forEach { uuid ->
+          deviceUuid = uuid
           Log.d(debugTag, "UUID is %s".format(uuid.uuid))
         }
 
@@ -111,23 +113,14 @@ class MainActivity : ComponentActivity() {
   }
 
   private inner class ConnectThread(device: BluetoothDevice) : Thread() {
-    private var mBtServerSocket: BluetoothServerSocket? = null
-
-
 //    private val mmSocket: BluetoothSocket? by lazy(LazyThreadSafetyMode.NONE) {
 ////       device.createInsecureRfcommSocketToServiceRecord(device.uuids[0].uuid)
 //      device.createRfcommSocketToServiceRecord(device.uuids[0].uuid)
 //      // Insecureだとアプリが落ちる
-//
-//      mBtServerSocket = bluetoothAdapter!!.listenUsingInsecureRfcommWithServiceRecord("com.kazuki19992.tracker", UUID.fromString("00001101-0000-1000-8000-00805F9B34FB"))
-//      mBtServerSocket!!.accept()
 //    }
-    private var mmSocket: BluetoothSocket?
 
-//    private var mBtDevice // BTデバイス
-//      : BluetoothDevice? = null
-//    private var mBtSocket // BTソケット
-//      : BluetoothSocket? = null
+    private val mmSocket: BluetoothSocket? = device.createRfcommSocketToServiceRecord(deviceUuid?.uuid)
+
 
     public override fun run() {
       bluetoothAdapter?.cancelDiscovery()
@@ -137,12 +130,6 @@ class MainActivity : ComponentActivity() {
       val socket = mmSocket
       log("ソケット: " + socket.toString())
       socket ?: return
-
-//      if (bluetoothAdapter != null) {
-//        mBtServerSocket = bluetoothAdapter.listenUsingInsecureRfcommWithServiceRecord("com.kazuki19992.tracker", UUID.fromString("00001101-0000-1000-8000-00805F9B34FB"))
-//      };
-
-
       try {
         socket.connect()
         log("ソケット接続確立")
@@ -172,14 +159,15 @@ class MainActivity : ComponentActivity() {
     override fun run() {
       var numBytes: Int // bytes returned from read()
       Log.d(debugTag, "connect start!")
-
+      // Keep listening to the InputStream until an exception occurs.
       while (true) {
         val mmBuffer: ByteArray = ByteArray(1024)
 
+        // Read from the InputStream.
         numBytes = try {
           mmInStream.read(mmBuffer)
         } catch (e: IOException) {
-          Log.e(debugTag, "Input stream was disconnected", e)
+          Log.d(debugTag, "Input stream was disconnected", e)
           break
         }
         val checkString = String(mmBuffer)

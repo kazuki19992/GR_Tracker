@@ -4,9 +4,13 @@ import android.app.Activity.RESULT_CANCELED
 import android.app.Activity.RESULT_OK
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothDevice
+import android.bluetooth.BluetoothManager
 import android.bluetooth.BluetoothSocket
+import android.bluetooth.BluetoothServerSocket
 import android.content.Intent
 import android.os.Bundle
+import android.os.Handler
+import android.text.method.MultiTapKeyListener.getInstance
 import android.util.Log
 import android.widget.Toast
 import android.widget.Toast.makeText
@@ -19,19 +23,34 @@ import androidx.compose.material.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.core.text.BidiFormatter.getInstance
+import com.google.android.libraries.maps.CameraUpdateFactory
+import com.google.android.libraries.maps.model.LatLng
+import com.google.android.libraries.maps.model.MarkerOptions
+import com.google.android.libraries.maps.model.PolylineOptions
+import com.google.maps.android.ktx.awaitMap
 import com.kazuki19992.tracker.ui.theme.TrackerTheme
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import java.io.IOException
 import java.io.InputStream
 import java.io.OutputStream
+import java.util.*
+import kotlin.reflect.typeOf
+
 
 // デバッグログのタグ
 const val debugTag = "DebugTag"
 
+var ReceivedString: String = "受信中……"
 
 class MainActivity : ComponentActivity() {
   val REQUEST_ENABLE_BT = 1
@@ -81,7 +100,7 @@ class MainActivity : ComponentActivity() {
 
     setContent {
       TrackerTheme {
-        TopView(deviceName)
+        TopView(deviceName, ReceivedString)
       }
     }
   }
@@ -92,11 +111,23 @@ class MainActivity : ComponentActivity() {
   }
 
   private inner class ConnectThread(device: BluetoothDevice) : Thread() {
-    private val mmSocket: BluetoothSocket? by lazy(LazyThreadSafetyMode.NONE) {
-//       device.createInsecureRfcommSocketToServiceRecord(device.uuids[0].uuid)
-      device.createRfcommSocketToServiceRecord(device.uuids[0].uuid)
-      // Insecureだとアプリが落ちる
-    }
+    private var mBtServerSocket: BluetoothServerSocket? = null
+
+
+//    private val mmSocket: BluetoothSocket? by lazy(LazyThreadSafetyMode.NONE) {
+////       device.createInsecureRfcommSocketToServiceRecord(device.uuids[0].uuid)
+//      device.createRfcommSocketToServiceRecord(device.uuids[0].uuid)
+//      // Insecureだとアプリが落ちる
+//
+//      mBtServerSocket = bluetoothAdapter!!.listenUsingInsecureRfcommWithServiceRecord("com.kazuki19992.tracker", UUID.fromString("00001101-0000-1000-8000-00805F9B34FB"))
+//      mBtServerSocket!!.accept()
+//    }
+    private var mmSocket: BluetoothSocket?
+
+//    private var mBtDevice // BTデバイス
+//      : BluetoothDevice? = null
+//    private var mBtSocket // BTソケット
+//      : BluetoothSocket? = null
 
     public override fun run() {
       bluetoothAdapter?.cancelDiscovery()
@@ -106,6 +137,12 @@ class MainActivity : ComponentActivity() {
       val socket = mmSocket
       log("ソケット: " + socket.toString())
       socket ?: return
+
+//      if (bluetoothAdapter != null) {
+//        mBtServerSocket = bluetoothAdapter.listenUsingInsecureRfcommWithServiceRecord("com.kazuki19992.tracker", UUID.fromString("00001101-0000-1000-8000-00805F9B34FB"))
+//      };
+
+
       try {
         socket.connect()
         log("ソケット接続確立")
@@ -113,12 +150,9 @@ class MainActivity : ComponentActivity() {
         err(e.message.toString())
         err(e.stackTraceToString())
       }
-      // The connection attempt succeeded. Perform work associated with
-      // the connection in a separate thread.
       manageMyConnectedSocket(socket)
     }
 
-    // Closes the client socket and causes the thread to finish.
     fun cancel() {
       try {
         mmSocket?.close()
@@ -129,26 +163,44 @@ class MainActivity : ComponentActivity() {
   }
 
 
-  private inner class ConnectedThread(private val mmSocket: BluetoothSocket) : Thread() {
+  public inner class ConnectedThread(private val mmSocket: BluetoothSocket) : Thread() {
 
     private val mmInStream: InputStream = mmSocket.inputStream
     private val mmOutStream: OutputStream = mmSocket.outputStream
-    private val mmBuffer: ByteArray = ByteArray(1024) // mmBuffer store for the stream
+//    val mmBuffer: ByteArray = ByteArray(55 + 47)
 
     override fun run() {
       var numBytes: Int // bytes returned from read()
       Log.d(debugTag, "connect start!")
-      // Keep listening to the InputStream until an exception occurs.
+
       while (true) {
-        // Read from the InputStream.
+        val mmBuffer: ByteArray = ByteArray(1024)
+
         numBytes = try {
           mmInStream.read(mmBuffer)
         } catch (e: IOException) {
-          Log.d(debugTag, "Input stream was disconnected", e)
+          Log.e(debugTag, "Input stream was disconnected", e)
           break
         }
-        Log.d(debugTag, mmBuffer[0].toString())
+        val checkString = String(mmBuffer)
+        val compareResult = checkString.startsWith("\$POS")
+
+//        // なぜかこっちだと動く
+        when {
+          compareResult == true -> notIgnore(checkString)
+          compareResult == false -> err("データ不完全のため無視")
+        }
+        log(mmBuffer.size.toString())
+
+        sleep(1000)
+        // 条件分岐でやるのはクソほど重いので一旦なしでやってみる
+//        notIgnore(checkString)
       }
+    }
+
+    fun notIgnore(checkString: String){
+      ReceivedString = checkString
+      log(ReceivedString)
     }
 
     fun cancel() {
@@ -183,14 +235,34 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-fun TopView(sensor: String) {
-  var received by remember { mutableStateOf("接続中...") }
+fun TopView(sensor: String, received: String) {
   Log.d(debugTag, "起動完了")
+
+  // ステート管理する
+  val (receivedState, updateReceivedState) = remember {
+    mutableStateOf(received)
+  }
+  // 数秒ごとにデータを取得する
+  SideEffect {
+    val handler = Handler()
+    var runnable = Runnable {  }
+
+    runnable = Runnable {
+      updateReceivedState(ReceivedString)
+      handler.postDelayed(runnable, 100)
+    }
+    handler.post(runnable)
+  }
+
+  val mapView = rememberMapViewWithLifecycle()
+//  err(Log.getStackTraceString(Throwable()))
+  log(mapView.javaClass.name)
 
   // トップ画面
   Column {
     Header(sensor)
-    SerialTerm(received)
+    MapViewComponents(mapView)
+    SerialTerm(receivedState)
   }
 }
 
@@ -220,7 +292,7 @@ fun SerialTerm(received: String) {
       )
       Spacer(modifier = Modifier.size(5.dp))
       Text(
-        text = "$received",
+        text = received,
         color = Color.Cyan,
         fontSize = 10.sp,
         fontFamily = FontFamily.Monospace
@@ -229,6 +301,67 @@ fun SerialTerm(received: String) {
 
   }
 }
+
+@Composable
+fun COMPLETE() {
+  Text(
+    text = "↑動くようになったよ!!!",
+    color = Color.Red,
+    fontWeight = FontWeight.Bold,
+    fontSize = 20.sp
+  )
+}
+
+@Composable
+fun MapViewComponents (mapView:com.google.android.libraries.maps.MapView) {
+  Card(
+    modifier = Modifier
+      .fillMaxWidth()
+      .padding(15.dp)
+      .height(230.dp)
+      .clickable { },
+    elevation = 10.dp,
+    backgroundColor = Color.DarkGray
+  ) {
+    AndroidView({ mapView}) {mapView->
+      CoroutineScope(Dispatchers.Main).launch {
+        val map = mapView.awaitMap()
+        map.uiSettings.isZoomControlsEnabled = true
+
+        val pickUp =  LatLng(-35.016, 143.321)
+        val destination = LatLng(-32.491, 147.309)
+        map.moveCamera(CameraUpdateFactory.newLatLngZoom(destination,6f))
+        val markerOptions = MarkerOptions()
+          .title("Sydney Opera House")
+          .position(pickUp)
+        map.addMarker(markerOptions)
+
+        val markerOptionsDestination = MarkerOptions()
+          .title("Restaurant Hubert")
+          .position(destination)
+        map.addMarker(markerOptionsDestination)
+
+        map.addPolyline(
+          PolylineOptions().add( pickUp,
+            LatLng(-34.747, 145.592),
+            LatLng(-34.364, 147.891),
+            LatLng(-33.501, 150.217),
+            LatLng(-32.306, 149.248),
+            destination))
+      }
+    }
+  }
+}
+
+//@Composable
+//fun TextLogs(logData: string) {
+//  Text(
+//    text = "Stream: " + logData,
+//    color = Color.Cyan,
+//    fontSize = 10.sp,
+//    fontFamily = FontFamily.Monospace
+//  )
+//}
 
 fun log(text:String) {
   Log.d(debugTag, text)

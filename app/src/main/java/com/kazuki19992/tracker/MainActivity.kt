@@ -113,13 +113,13 @@ class MainActivity : ComponentActivity() {
   }
 
   private inner class ConnectThread(device: BluetoothDevice) : Thread() {
-    private val mmSocket: BluetoothSocket? by lazy(LazyThreadSafetyMode.NONE) {
-       device.createInsecureRfcommSocketToServiceRecord(deviceUuid?.uuid)
-      device.createRfcommSocketToServiceRecord(deviceUuid?.uuid)
-      // Insecureだとアプリが落ちる
-    }
+//    private val mmSocket: BluetoothSocket? by lazy(LazyThreadSafetyMode.NONE) {
+//      device.createInsecureRfcommSocketToServiceRecord(deviceUuid?.uuid)
+//      device.createRfcommSocketToServiceRecord(deviceUuid?.uuid)
+//      // Insecureだとアプリが落ちる
+//    }
 
-//    private val mmSocket: BluetoothSocket? = device.createRfcommSocketToServiceRecord(deviceUuid?.uuid)
+    private val mmSocket: BluetoothSocket? = device.createRfcommSocketToServiceRecord(deviceUuid?.uuid)
 
 
     public override fun run() {
@@ -138,10 +138,9 @@ class MainActivity : ComponentActivity() {
           break
 
         }catch (e: IOException){
-          err("エラー発生!")
           err(e.message.toString())
           err(e.stackTraceToString())
-
+          ReceivedString = e.message.toString()
           // 再試行
           sleep(1000)
           continue
@@ -181,9 +180,10 @@ class MainActivity : ComponentActivity() {
         try{
           log("データを読みます")
           Log.d(debugTag, mmInStream.toString())
-//          mmInStream.read(mmBuffer)
+          mmInStream.read(mmBuffer)
         } catch (e: IOException) {
           Log.e(debugTag, "Input stream was disconnected", e)
+          ReceivedString = e.toString()
           break
         }
         log("データ:" + tmpText)

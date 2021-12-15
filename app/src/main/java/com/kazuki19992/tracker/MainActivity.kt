@@ -43,6 +43,8 @@ import java.io.OutputStream
 import java.lang.String.format
 import java.util.*
 import kotlin.reflect.typeOf
+import kotlin.system.exitProcess
+import java.util.Arrays.toString as toString1
 
 
 // デバッグログのタグ
@@ -265,10 +267,13 @@ fun TopView(sensor: String, received: String) {
   val mapView = rememberMapViewWithLifecycle()
 //  log(mapView.javaClass.name)
 
+  // デバッグ用
+  val debug = "\$POS,Nihon,5:57:57,37:21:6824,N,140:22:9944,E,1,4\n"
+
   // トップ画面
   Column {
     Header(sensor)
-    MapViewComponents(mapView)
+    MapViewComponents(mapView, debug)
     SerialTerm(receivedState)
   }
 }
@@ -309,18 +314,53 @@ fun SerialTerm(received: String) {
   }
 }
 
-@Composable
-fun COMPLETE() {
-  Text(
-    text = "↑動くようになったよ!!!",
-    color = Color.Red,
-    fontWeight = FontWeight.Bold,
-    fontSize = 20.sp
-  )
+fun receivedToLatLng (received: String): LatLng {
+  log("受信データ: " + received)
+  // $POS,Nihon,23:59:59,37:21:6824,N,140:22:9944,E,1,4
+  val ptn = "^\\\$POS,[\\w]*,[1|2]?\\d:[0-5]?\\d:[0-5]?\\d,\\d*:\\d*:\\d*,N,\\d*:\\d*:\\d*,E,\\d,\\d\\n"
+  val regex = Regex(pattern = ptn)
+  if(regex.matches(received)){
+    log("マッチしました")
+//    マッチしたら処理をする
+    val splited = received.split(",").map { it.trim() }
+    val latitude = splited[3]
+    val NorS = splited[4]
+    val longitude = splited[5]
+    val EorW = splited[6]
+    Log.d(debugTag, latitude + NorS + "," + longitude + EorW)
+
+    // 度分秒から度に変換
+    val convedLat = degminsecToDegree(latitude)
+    val convedLng = degminsecToDegree(longitude)
+
+    return LatLng(convedLat, convedLng)
+  }
+  exitProcess(-1)
+}
+
+fun getName (received: String) : String {
+  val ptn = "^\\\$POS,[\\w]*,[1|2]?\\d:[0-5]?\\d:[0-5]?\\d,\\d*:\\d*:\\d*,N,\\d*:\\d*:\\d*,E,\\d,\\d\\n"
+  val regex = Regex(pattern = ptn)
+  if(regex.matches(received)){
+    val splited = received.split(",").map { it.trim() }
+    return splited[1]
+  }
+  return "???"
+}
+
+fun degminsecToDegree (degminsec: String): Double {
+  val splited = degminsec.split(":")
+  val degree = splited[0].toDoubleOrNull()
+  val minute = (splited[1] + "." + splited[2]).toDoubleOrNull()
+
+  if(degree != null && minute != null) {
+    return degree + (minute / 60)
+  }
+  return -999.9
 }
 
 @Composable
-fun MapViewComponents (mapView:com.google.android.libraries.maps.MapView) {
+fun MapViewComponents (mapView:com.google.android.libraries.maps.MapView, received: String) {
   Card(
     modifier = Modifier
       .fillMaxWidth()
@@ -335,26 +375,21 @@ fun MapViewComponents (mapView:com.google.android.libraries.maps.MapView) {
         val map = mapView.awaitMap()
         map.uiSettings.isZoomControlsEnabled = true
 
-        val pickUp =  LatLng(-35.016, 143.321)
-        val destination = LatLng(-32.491, 147.309)
-        map.moveCamera(CameraUpdateFactory.newLatLngZoom(destination,6f))
+        val pinned = receivedToLatLng(received = received)
+//        val destination = LatLng(-32.491, 147.309)
+        map.moveCamera(CameraUpdateFactory.newLatLngZoom(pinned,15f))
         val markerOptions = MarkerOptions()
-          .title("Sydney Opera House")
-          .position(pickUp)
+          .title(getName(received))
+          .position(pinned)
         map.addMarker(markerOptions)
 
-        val markerOptionsDestination = MarkerOptions()
-          .title("Restaurant Hubert")
-          .position(destination)
-        map.addMarker(markerOptionsDestination)
-
-        map.addPolyline(
-          PolylineOptions().add( pickUp,
-            LatLng(-34.747, 145.592),
-            LatLng(-34.364, 147.891),
-            LatLng(-33.501, 150.217),
-            LatLng(-32.306, 149.248),
-            destination))
+//        map.addPolyline(
+//          PolylineOptions().add( pickUp,
+//            LatLng(-34.747, 145.592),
+//            LatLng(-34.364, 147.891),
+//            LatLng(-33.501, 150.217),
+//            LatLng(-32.306, 149.248),
+//            destination))
       }
     }
   }

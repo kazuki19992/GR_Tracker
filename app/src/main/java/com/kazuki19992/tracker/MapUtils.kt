@@ -1,17 +1,27 @@
 package com.kazuki19992.tracker
 
 import android.os.Bundle
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.remember
+import android.os.Handler
+import android.util.Log
+import androidx.compose.runtime.*
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
+import com.google.android.libraries.maps.CameraUpdateFactory
 import com.google.android.libraries.maps.MapView
+import com.google.android.libraries.maps.model.LatLng
+import com.google.android.libraries.maps.model.MarkerOptions
+import com.google.maps.android.ktx.awaitMap
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+
+
 
 @Composable
-fun rememberMapViewWithLifecycle(): MapView {
+fun rememberMapViewWithLifecycle(location: LatLng): MapView {
+
   val context = LocalContext.current
   val mapView = remember {
     MapView(context).apply {
@@ -22,7 +32,9 @@ fun rememberMapViewWithLifecycle(): MapView {
   // Makes MapView follow the lifecycle of this composable
   val lifecycleObserver = rememberMapLifecycleObserver(mapView)
   val lifecycle = LocalLifecycleOwner.current.lifecycle
-  DisposableEffect(lifecycle) {
+//  DisposableEffect(lifecycle) {
+  DisposableEffect(location) {
+    log("再描画")
     lifecycle.addObserver(lifecycleObserver)
     onDispose {
       lifecycle.removeObserver(lifecycleObserver)
@@ -33,7 +45,7 @@ fun rememberMapViewWithLifecycle(): MapView {
 }
 
 @Composable
-fun rememberMapLifecycleObserver(mapView: MapView): LifecycleEventObserver =
+fun rememberMapLifecycleObserver(mapView: MapView ): LifecycleEventObserver =
   remember(mapView) {
     LifecycleEventObserver { _, event ->
       when (event) {

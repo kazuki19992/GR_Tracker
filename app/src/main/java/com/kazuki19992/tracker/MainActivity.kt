@@ -4,6 +4,7 @@ import android.app.Activity.RESULT_CANCELED
 import android.app.Activity.RESULT_OK
 import android.bluetooth.*
 import android.content.Intent
+import android.graphics.Bitmap
 import android.os.Bundle
 import android.os.Handler
 import android.os.ParcelUuid
@@ -13,6 +14,7 @@ import android.widget.Toast
 import android.widget.Toast.makeText
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 //import androidx.compose.material.Text
@@ -20,6 +22,7 @@ import androidx.compose.material.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -28,6 +31,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.text.BidiFormatter.getInstance
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import com.google.android.libraries.maps.CameraUpdateFactory
 import com.google.android.libraries.maps.model.LatLng
 import com.google.android.libraries.maps.model.MarkerOptions
@@ -263,17 +268,26 @@ fun TopView(sensor: String, received: String) {
     handler.post(runnable)
   }
 
-  // マップ関連
-  val mapView = rememberMapViewWithLifecycle()
-//  log(mapView.javaClass.name)
+//  // マップ関連
+//  val mapView = rememberMapViewWithLifecycle()
 
   // デバッグ用
-  val debug = "\$POS,Nihon,5:57:57,37:21:6824,N,140:22:9944,E,1,4\n"
+//  val debug = "\$POS,Nihon,5:57:57,37:21:6824,N,140:22:9944,E,1,4\n"
 
   // トップ画面
   Column {
     Header(sensor)
-    MapViewComponents(mapView, debug)
+    Card(
+      modifier = Modifier
+        .fillMaxWidth()
+        .padding(15.dp)
+        .height(230.dp)
+        .clickable { },
+      elevation = 10.dp,
+      backgroundColor = Color.DarkGray
+    ) {
+      MapViewComponents(receivedToLatLng(receivedState), getName(receivedState))
+    }
     SerialTerm(receivedState)
   }
 }
@@ -314,6 +328,17 @@ fun SerialTerm(received: String) {
   }
 }
 
+fun degminsecToDegree (degminsec: String): Double {
+  val splited = degminsec.split(":")
+  val degree = splited[0].toDoubleOrNull()
+  val minute = (splited[1] + "." + splited[2]).toDoubleOrNull()
+
+  if(degree != null && minute != null) {
+    return degree + (minute / 60)
+  }
+  return -999.9
+}
+
 fun receivedToLatLng (received: String): LatLng {
   log("受信データ: " + received)
   // $POS,Nihon,23:59:59,37:21:6824,N,140:22:9944,E,1,4
@@ -335,7 +360,7 @@ fun receivedToLatLng (received: String): LatLng {
 
     return LatLng(convedLat, convedLng)
   }
-  exitProcess(-1)
+  return LatLng(35.68, 139.76)
 }
 
 fun getName (received: String) : String {
@@ -348,62 +373,89 @@ fun getName (received: String) : String {
   return "???"
 }
 
-fun degminsecToDegree (degminsec: String): Double {
-  val splited = degminsec.split(":")
-  val degree = splited[0].toDoubleOrNull()
-  val minute = (splited[1] + "." + splited[2]).toDoubleOrNull()
-
-  if(degree != null && minute != null) {
-    return degree + (minute / 60)
-  }
-  return -999.9
-}
-
 @Composable
-fun MapViewComponents (mapView:com.google.android.libraries.maps.MapView, received: String) {
-  Card(
-    modifier = Modifier
-      .fillMaxWidth()
-      .padding(15.dp)
-      .height(230.dp)
-      .clickable { },
-    elevation = 10.dp,
-    backgroundColor = Color.DarkGray
-  ) {
-    AndroidView({ mapView}) {mapView->
-      CoroutineScope(Dispatchers.Main).launch {
+fun MapViewComponents (location: LatLng, name: String) {
+  val mapBitmap: MutableState<Bitmap?> = remember { mutableStateOf(null) }
+  val coroutineScope = rememberCoroutineScope()
+
+  Log.d(debugTag, mapBitmap.value.toString())
+
+  // マップ関連
+  val mapView = rememberMapViewWithLifecycle(location)
+
+  if (mapBitmap.value != null) {
+    Image(
+      bitmap = mapBitmap.value!!.asImageBitmap(),
+      contentDescription = "Map snapshot",
+    )
+//    AndroidView({ mapView }) { mapView ->
+////      CoroutineScope(Dispatchers.Main).launch {
+//      coroutineScope.launch {
+//        val map = mapView.awaitMap()
+////        map.uiSettings.isZoomControlsEnabled = true
+//
+////        var pinned = receivedToLatLng(received = receivedData)
+//        map.moveCamera(CameraUpdateFactory.newLatLngZoom(location, 15f))
+//        map.addMarker(
+//          MarkerOptions()
+//            .title(name)
+//            .position(location)
+//        )
+////        map.setOnMapLoadedCallback {
+////          map.snapshot {
+////            mapBitmap.value = it
+////          }
+////        }
+//      }
+//    }
+
+  } else {
+
+    AndroidView({ mapView }) { mapView ->
+//      CoroutineScope(Dispatchers.Main).launch {
+      coroutineScope.launch {
         val map = mapView.awaitMap()
-        map.uiSettings.isZoomControlsEnabled = true
+//        map.uiSettings.isZoomControlsEnabled = true
 
-        val pinned = receivedToLatLng(received = received)
-//        val destination = LatLng(-32.491, 147.309)
-        map.moveCamera(CameraUpdateFactory.newLatLngZoom(pinned,15f))
-        val markerOptions = MarkerOptions()
-          .title(getName(received))
-          .position(pinned)
-        map.addMarker(markerOptions)
-
-//        map.addPolyline(
-//          PolylineOptions().add( pickUp,
-//            LatLng(-34.747, 145.592),
-//            LatLng(-34.364, 147.891),
-//            LatLng(-33.501, 150.217),
-//            LatLng(-32.306, 149.248),
-//            destination))
+//        var pinned = receivedToLatLng(received = receivedData)
+        map.moveCamera(CameraUpdateFactory.newLatLngZoom(location, 15f))
+        map.addMarker(
+          MarkerOptions()
+            .title(name)
+            .position(location)
+        )
+        map.setOnMapLoadedCallback {
+          map.snapshot {
+            mapBitmap.value = it
+          }
+        }
+//        map.snapshot {
+//          mapBitmap.value = it
+//        }
       }
     }
   }
-}
+  
+  DisposableEffect(location) {
+    log("再描画")
+//    val observer = LifecycleEventObserver { _, event ->
+//      when (event) {
+//        Lifecycle.Event.ON_CREATE -> mapView.onCreate(Bundle())
+//        Lifecycle.Event.ON_START -> mapView.onStart()
+//        Lifecycle.Event.ON_RESUME -> mapView.onResume()
+//        Lifecycle.Event.ON_PAUSE -> mapView.onPause()
+//        Lifecycle.Event.ON_STOP -> mapView.onStop()
+//        Lifecycle.Event.ON_DESTROY -> mapView.onDestroy()
+//        else -> throw IllegalStateException()
+//      }
+//    }
 
-//@Composable
-//fun TextLogs(logData: string) {
-//  Text(
-//    text = "Stream: " + logData,
-//    color = Color.Cyan,
-//    fontSize = 10.sp,
-//    fontFamily = FontFamily.Monospace
-//  )
-//}
+    mapBitmap.value = null
+    onDispose {
+      mapBitmap.value = null
+    }
+  }
+}
 
 fun log(text:String) {
   Log.d(debugTag, text)
@@ -411,11 +463,3 @@ fun log(text:String) {
 fun err(text:String) {
   Log.e(debugTag, text)
 }
-
-//@Preview(showBackground = true)
-//@Composable
-//fun DefaultPreview() {
-//    AndroidTutorialTheme {
-//        Greeting("Android")
-//    }
-//}

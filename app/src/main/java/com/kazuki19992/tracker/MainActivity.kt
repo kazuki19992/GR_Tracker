@@ -2,10 +2,7 @@ package com.kazuki19992.tracker
 
 import android.app.Activity.RESULT_CANCELED
 import android.app.Activity.RESULT_OK
-import android.bluetooth.BluetoothAdapter
-import android.bluetooth.BluetoothDevice
-import android.bluetooth.BluetoothManager
-import android.bluetooth.BluetoothSocket
+import android.bluetooth.*
 import android.content.Intent
 import android.os.Bundle
 import android.os.Handler
@@ -44,6 +41,7 @@ import java.io.IOException
 import java.io.InputStream
 import java.io.OutputStream
 import java.lang.String.format
+import java.util.*
 import kotlin.reflect.typeOf
 
 
@@ -119,8 +117,12 @@ class MainActivity : ComponentActivity() {
 //      // Insecureだとアプリが落ちる
 //    }
 
-    private val mmSocket: BluetoothSocket? = device.createRfcommSocketToServiceRecord(deviceUuid?.uuid)
+    // なんかサーバーソケット？でも許可してあげなきゃいけないっぽい？
 
+    private val mBtServerSocket: BluetoothServerSocket? = bluetoothAdapter?.listenUsingInsecureRfcommWithServiceRecord("com.kazuki19992.tracker", deviceUuid?.uuid)
+    // private var mmSocket: BluetoothSocket? = mBtServerSocket?.accept()
+    private val mmSocket = device.createRfcommSocketToServiceRecord(UUID.fromString("00001101-0000-1000-8000-00805F9B34FB"))
+    //mmSocket = BluetoothDevice.createRfcommSocketToServiceRecord(deviceUuid?.uuid)
 
     public override fun run() {
       bluetoothAdapter?.cancelDiscovery()

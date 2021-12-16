@@ -35,6 +35,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import com.google.android.libraries.maps.CameraUpdateFactory
 import com.google.android.libraries.maps.model.LatLng
+import com.google.android.libraries.maps.model.Marker
 import com.google.android.libraries.maps.model.MarkerOptions
 import com.google.android.libraries.maps.model.PolylineOptions
 import com.google.maps.android.ktx.awaitMap
@@ -50,6 +51,9 @@ import java.util.*
 import kotlin.reflect.typeOf
 import kotlin.system.exitProcess
 import java.util.Arrays.toString as toString1
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import java.lang.Thread.sleep
 
 
 // デバッグログのタグ
@@ -340,12 +344,12 @@ fun degminsecToDegree (degminsec: String): Double {
 }
 
 fun receivedToLatLng (received: String): LatLng {
-  log("受信データ: " + received)
+  Log.d("receivedToLatLnd", "受信データ: " + received)
   // $POS,Nihon,23:59:59,37:21:6824,N,140:22:9944,E,1,4
-  val ptn = "^\\\$POS,[\\w]*,[1|2]?\\d:[0-5]?\\d:[0-5]?\\d,\\d*:\\d*:\\d*,N,\\d*:\\d*:\\d*,E,\\d,\\d\\n"
+  val ptn = "^\\\$POS,\\w+,[1|2]?\\d:[0-5]?\\d:[0-5]?\\d,\\d+:\\d+:\\d+,N,\\d+:\\d+:\\d+,E,[1|A].*"
   val regex = Regex(pattern = ptn)
-  if(regex.matches(received)){
-    log("マッチしました")
+  if(regex.containsMatchIn(received)){
+    Log.d("receivedToLatLnd","部分的にマッチしました")
 //    マッチしたら処理をする
     val splited = received.split(",").map { it.trim() }
     val latitude = splited[3]
@@ -360,6 +364,7 @@ fun receivedToLatLng (received: String): LatLng {
 
     return LatLng(convedLat, convedLng)
   }
+  Log.e("receivedToLatLnd","マッチしなかったです")
   return LatLng(35.68, 139.76)
 }
 
@@ -375,80 +380,74 @@ fun getName (received: String) : String {
 
 @Composable
 fun MapViewComponents (location: LatLng, name: String) {
+  // マップ関連
+  val mapView = rememberMapViewWithLifecycle()
   val mapBitmap: MutableState<Bitmap?> = remember { mutableStateOf(null) }
   val coroutineScope = rememberCoroutineScope()
-
-  Log.d(debugTag, mapBitmap.value.toString())
-
-  // マップ関連
-  val mapView = rememberMapViewWithLifecycle(location)
-
-  if (mapBitmap.value != null) {
-    Image(
-      bitmap = mapBitmap.value!!.asImageBitmap(),
-      contentDescription = "Map snapshot",
-    )
-//    AndroidView({ mapView }) { mapView ->
-////      CoroutineScope(Dispatchers.Main).launch {
-//      coroutineScope.launch {
-//        val map = mapView.awaitMap()
-////        map.uiSettings.isZoomControlsEnabled = true
+//  val (locationState, setLocationState) = remember { mutableStateOf(location) }
 //
-////        var pinned = receivedToLatLng(received = receivedData)
-//        map.moveCamera(CameraUpdateFactory.newLatLngZoom(location, 15f))
+//  // 数秒ごとにデータを取得する
+//  SideEffect {
+//    val handler = Handler()
+//    var runnable = Runnable {  }
+//
+//    runnable = Runnable {
+//      setLocationState(receivedToLatLng(ReceivedString))
+//      handler.postDelayed(runnable, 10)
+//    }
+//    handler.post(runnable)
+//  }
+
+
+
+//  if (mapBitmap.value != null) {
+//    Log.d("mapDebug", "ロケーション(NonNull): " + location.toString())
+//    Image(
+//      bitmap = mapBitmap.value!!.asImageBitmap(),
+//      contentDescription = "Map snapshot",
+//    )
+//  } else {
+//    Log.d("mapDebug", "ロケーション: " + location.toString())
+    AndroidView({ mapView }) { mapView ->
+//      CoroutineScope(Dispatchers.Main).launch {
+      coroutineScope.launch {
+        val map = mapView.awaitMap()
+        map.uiSettings.isZoomControlsEnabled = true
+
+//        var pinned = receivedToLatLng(received = receivedData)
+        map.moveCamera(CameraUpdateFactory.newLatLngZoom(location, 15f))
+        val marker = map.addMarker(
+          MarkerOptions()
+            .title(name)
+            .position(location)
+        )
 //        map.addMarker(
 //          MarkerOptions()
 //            .title(name)
 //            .position(location)
 //        )
-////        map.setOnMapLoadedCallback {
-////          map.snapshot {
-////            mapBitmap.value = it
-////          }
-////        }
-//      }
-//    }
 
-  } else {
 
-    AndroidView({ mapView }) { mapView ->
-//      CoroutineScope(Dispatchers.Main).launch {
-      coroutineScope.launch {
-        val map = mapView.awaitMap()
-//        map.uiSettings.isZoomControlsEnabled = true
-
-//        var pinned = receivedToLatLng(received = receivedData)
-        map.moveCamera(CameraUpdateFactory.newLatLngZoom(location, 15f))
-        map.addMarker(
-          MarkerOptions()
-            .title(name)
-            .position(location)
-        )
+        marker?.tag = name
         map.setOnMapLoadedCallback {
           map.snapshot {
             mapBitmap.value = it
           }
         }
+        Log.d("mapDebug", marker.toString())
+//        sleep(5000)
+//        marker.remove()
 //        map.snapshot {
 //          mapBitmap.value = it
 //        }
       }
     }
-  }
+//  }
+
+
   
-  DisposableEffect(location) {
-    log("再描画")
-//    val observer = LifecycleEventObserver { _, event ->
-//      when (event) {
-//        Lifecycle.Event.ON_CREATE -> mapView.onCreate(Bundle())
-//        Lifecycle.Event.ON_START -> mapView.onStart()
-//        Lifecycle.Event.ON_RESUME -> mapView.onResume()
-//        Lifecycle.Event.ON_PAUSE -> mapView.onPause()
-//        Lifecycle.Event.ON_STOP -> mapView.onStop()
-//        Lifecycle.Event.ON_DESTROY -> mapView.onDestroy()
-//        else -> throw IllegalStateException()
-//      }
-//    }
+  DisposableEffect(key1 = location) {
+    Log.d("mapDebug","再描画")
 
     mapBitmap.value = null
     onDispose {

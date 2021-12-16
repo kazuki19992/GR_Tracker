@@ -20,7 +20,7 @@ import kotlinx.coroutines.launch
 
 
 @Composable
-fun rememberMapViewWithLifecycle(location: LatLng): MapView {
+fun rememberMapViewWithLifecycle(): MapView {
 
   val context = LocalContext.current
   val mapView = remember {
@@ -32,9 +32,7 @@ fun rememberMapViewWithLifecycle(location: LatLng): MapView {
   // Makes MapView follow the lifecycle of this composable
   val lifecycleObserver = rememberMapLifecycleObserver(mapView)
   val lifecycle = LocalLifecycleOwner.current.lifecycle
-//  DisposableEffect(lifecycle) {
-  DisposableEffect(location) {
-    log("再描画")
+  DisposableEffect(lifecycle) {
     lifecycle.addObserver(lifecycleObserver)
     onDispose {
       lifecycle.removeObserver(lifecycleObserver)
